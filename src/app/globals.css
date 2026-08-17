@@ -1,0 +1,105 @@
+/* Bengali fonts — must be first */
+@import url("https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Noto+Sans+Bengali:wght@300;400;500;600;700&family=Tiro+Bangla:ital@0;1&display=swap");
+
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #f0fdf9;
+  --color-brand-100: #ccfbef;
+  --color-brand-200: #99f6e0;
+  --color-brand-300: #5eead4;
+  --color-brand-400: #2dd4bf;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+  --color-brand-800: #115e59;
+  --color-brand-900: #134e4a;
+
+  --color-surface: #f7f8fa;
+  --color-card: #ffffff;
+  --color-border: #eaecf0;
+  --color-muted: #f2f4f7;
+  --color-muted-text: #667085;
+
+  --font-sans: "Hind Siliguri", "Noto Sans Bengali", system-ui, sans-serif;
+  --font-heading: "Tiro Bangla", "Hind Siliguri", serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; font-size: 15px; }
+
+body {
+  font-family: "Hind Siliguri", "Noto Sans Bengali", system-ui, sans-serif;
+  background: #f7f8fa;
+  color: #101828;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, .font-heading {
+  font-family: "Tiro Bangla", "Hind Siliguri", serif;
+  letter-spacing: -0.01em;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0d5dd; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #98a2b3; }
+
+/* Focus */
+:focus-visible { outline: 2px solid #14b8a6; outline-offset: 2px; }
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulseGlow {
+  0%   { box-shadow: 0 0 0 0 rgba(20,184,166,.35); }
+  70%  { box-shadow: 0 0 0 8px rgba(20,184,166,0); }
+  100% { box-shadow: 0 0 0 0 rgba(20,184,166,0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.animate-fade-up   { animation: fadeUp   .3s ease-out both; }
+.animate-fade-in   { animation: fadeIn   .2s ease-out both; }
+.animate-slide-down { animation: slideDown .25s ease-out both; }
+.animate-pulse-glow { animation: pulseGlow 2s infinite; }
+
+/* Bottom nav safe area */
+.bottom-nav-safe { padding-bottom: env(safe-area-inset-bottom, 0); }
+
+/* Hide scrollbar but keep scroll */
+.scroll-hide { scrollbar-width: none; -ms-overflow-style: none; }
+.scroll-hide::-webkit-scrollbar { display: none; }
+
+/* Mobile horizontal scroll */
+@media (max-width: 768px) {
+  .mobile-scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .mobile-scroll-x::-webkit-scrollbar { display: none; }
+}
+
+/* Card hover lift */
+.card-hover { transition: box-shadow .18s ease, transform .18s ease; }
+.card-hover:hover { box-shadow: 0 8px 24px -4px rgba(16,24,40,.10); transform: translateY(-2px); }
+
+/* Glass effect for overlays */
+.glass { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }

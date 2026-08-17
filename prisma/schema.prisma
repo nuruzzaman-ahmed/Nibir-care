@@ -1,0 +1,599 @@
+// DOC&TEST — Full Production Schema
+// SQLite for dev, PostgreSQL for production (just change provider + DATABASE_URL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// ENUMS (SQLite: use String + app-level enforcement)
+// ─────────────────────────────────────────────────────────────
+
+// User roles
+// PATIENT | DOCTOR | DIAGNOSTIC | ADMIN
+
+// Verification status
+// PENDING | UNDER_REVIEW | VERIFIED | REJECTED | SUSPENDED
+
+// Appointment status
+// BOOKED | WAITING | CURRENT | COMPLETED | SKIPPED | NO_SHOW | CANCELLED
+
+// Queue status
+// NOT_STARTED | RUNNING | PAUSED | COMPLETED | CANCELLED
+
+// Appointment type
+// SERIAL | SLOT
+
+// Gender
+// MALE | FEMALE | OTHER
+
+// Notification type
+// BOOKING_CONFIRMED | QUEUE_APPROACHING | QUEUE_NEAR | QUEUE_VERY_NEAR
+// QUEUE_CURRENT | DOCTOR_DELAY | CHAMBER_CANCELLED | TEST_BOOKING_CONFIRMED
+// GENERAL
+
+// ─────────────────────────────────────────────────────────────
+// AUTH / USER
+// ─────────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime?
+  image          String?
+  phone          String?   @unique
+  passwordHash   String?
+  role           String    @default("PATIENT") // PATIENT | DOCTOR | DIAGNOSTIC | ADMIN
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  patientProfile PatientProfile?
+  doctorProfile  DoctorProfile?
+  diagnosticCenter DiagnosticCenter?
+  notifications  Notification[]
+  reviews        Review[]
+  favorites      Favorite[]
+}
+
+// ─────────────────────────────────────────────────────────────
+// PATIENT
+// ─────────────────────────────────────────────────────────────
+
+model PatientProfile {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  nameEn      String?
+  nameBn      String?
+  dateOfBirth DateTime?
+  gender      String?   // MALE | FEMALE | OTHER
+  bloodGroup  String?
+  address     String?
+  division    String?
+  district    String?
+  thana       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments  Appointment[]
+  testBookings  TestBooking[]
+  prescriptions Prescription[]
+}
+
+// ─────────────────────────────────────────────────────────────
+// LOCATION / SPECIALTY / CATEGORY
+// ─────────────────────────────────────────────────────────────
+
+model Specialty {
+  id          String   @id @default(cuid())
+  nameEn      String
+  nameBn      String
+  slug        String   @unique
+  icon        String?
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  doctors DoctorSpecialty[]
+}
+
+model Location {
+  id         String   @id @default(cuid())
+  division   String
+  district   String
+  thana      String?
+  area       String?
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+
+  doctors          DoctorProfile[]
+  diagnosticCenters DiagnosticCenter[]
+  chambers         DoctorChamber[]
+}
+
+// ─────────────────────────────────────────────────────────────
+// DOCTOR
+// ─────────────────────────────────────────────────────────────
+
+model DoctorProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  slug               String   @unique
+  nameEn             String
+  nameBn             String
+  photo              String?
+  bmdc               String?  @unique
+  gender             String?  // MALE | FEMALE
+  languages          String?  // JSON array
+  about              String?
+  consultationFee    Int      @default(0)
+  followUpFee        Int      @default(0)
+  experience         Int      @default(0) // years
+  degrees            String?  // JSON array: [{title, institution, year}]
+  services           String?  // JSON array of strings
+  awards             String?  // JSON array
+  verificationStatus String   @default("PENDING") // PENDING|UNDER_REVIEW|VERIFIED|REJECTED|SUSPENDED
+  verifiedAt         DateTime?
+  isAvailableToday   Boolean  @default(false)
+  rating             Float    @default(0)
+  totalReviews       Int      @default(0)
+  totalAppointments  Int      @default(0)
+  locationId         String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location      Location?         @relation(fields: [locationId], references: [id])
+  specialties   DoctorSpecialty[]
+  chambers      DoctorChamber[]
+  appointments  Appointment[]
+  reviews       Review[]
+  favorites     Favorite[]
+  centerLinks   CenterDoctor[]
+  prescriptions Prescription[]
+  subscription  Subscription?
+}
+
+model DoctorSpecialty {
+  id          String        @id @default(cuid())
+  doctorId    String
+  specialtyId String
+  isPrimary   Boolean       @default(false)
+
+  doctor    DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  specialty Specialty     @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, specialtyId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// DIAGNOSTIC CENTER
+// ─────────────────────────────────────────────────────────────
+
+model DiagnosticCenter {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  slug               String   @unique
+  nameEn             String
+  nameBn             String
+  logo               String?
+  coverImage         String?
+  about              String?
+  phone              String?
+  email              String?
+  website            String?
+  address            String
+  division           String
+  district           String
+  thana              String?
+  googleMapUrl       String?
+  latitude           Float?
+  longitude          Float?
+  openingTime        String?  // "08:00"
+  closingTime        String?  // "20:00"
+  openDays           String?  // JSON: ["SAT","SUN","MON","TUE","WED","THU"]
+  facilities         String?  // JSON array
+  verificationStatus String   @default("PENDING")
+  verifiedAt         DateTime?
+  rating             Float    @default(0)
+  totalReviews       Int      @default(0)
+  locationId         String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location     Location?        @relation(fields: [locationId], references: [id])
+  services     DiagnosticService[]
+  doctors      CenterDoctor[]
+  chambers     DoctorChamber[]
+  testBookings TestBooking[]
+  reviews      Review[]
+  favorites    Favorite[]
+  subscription Subscription?
+}
+
+model DiagnosticService {
+  id               String   @id @default(cuid())
+  centerId         String
+  nameEn           String
+  nameBn           String
+  category         String?  // X-Ray | CT Scan | MRI | Blood Test | etc.
+  price            Int
+  discountPrice    Int?
+  duration         Int?     // minutes
+  preparation      String?  // what patient should do before
+  reportTime       String?  // "1 day" | "3 hours"
+  availability     String?  // JSON: schedule
+  isActive         Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  center       DiagnosticCenter @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  testBookings TestBooking[]
+}
+
+// Doctor ↔ Diagnostic Center many-to-many
+model CenterDoctor {
+  id        String   @id @default(cuid())
+  centerId  String
+  doctorId  String
+  isActive  Boolean  @default(true)
+  addedAt   DateTime @default(now())
+
+  center DiagnosticCenter @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  doctor DoctorProfile    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([centerId, doctorId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// CHAMBER & SCHEDULE
+// ─────────────────────────────────────────────────────────────
+
+model DoctorChamber {
+  id                 String   @id @default(cuid())
+  doctorId           String
+  centerId           String?  // nullable = private chamber
+  nameEn             String
+  nameBn             String
+  address            String
+  locationId         String?
+  latitude           Float?
+  longitude          Float?
+  googleMapUrl       String?
+  phone              String?
+  appointmentType    String   @default("SERIAL") // SERIAL | SLOT
+  slotDuration       Int      @default(15)       // minutes per slot
+  avgConsultDuration Int      @default(10)       // doctor's configured avg
+  dailyLimit         Int      @default(30)
+  breakStartTime     String?  // "14:00"
+  breakEndTime       String?  // "14:30"
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  doctor       DoctorProfile    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  center       DiagnosticCenter? @relation(fields: [centerId], references: [id])
+  location     Location?        @relation(fields: [locationId], references: [id])
+  schedules    ChamberSchedule[]
+  appointments Appointment[]
+  queues       Queue[]
+}
+
+model ChamberSchedule {
+  id         String   @id @default(cuid())
+  chamberId  String
+  dayOfWeek  Int      // 0=Sunday, 1=Monday, ..., 6=Saturday
+  startTime  String   // "17:00"
+  endTime    String   // "21:00"
+  isActive   Boolean  @default(true)
+
+  chamber DoctorChamber @relation(fields: [chamberId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────────────────────
+// QUEUE
+// ─────────────────────────────────────────────────────────────
+
+model Queue {
+  id                 String    @id @default(cuid())
+  chamberId          String
+  date               String    // "2024-01-15" — ISO date string
+  status             String    @default("NOT_STARTED") // NOT_STARTED|RUNNING|PAUSED|COMPLETED|CANCELLED
+  currentSerial      Int       @default(0)
+  totalBooked        Int       @default(0)
+  totalCompleted     Int       @default(0)
+  totalSkipped       Int       @default(0)
+  totalNoShow        Int       @default(0)
+  avgConsultDuration Float     @default(10) // rolling average (minutes)
+  doctorDelayMinutes Int       @default(0)
+  startedAt          DateTime?
+  pausedAt           DateTime?
+  completedAt        DateTime?
+  note               String?   // doctor's note (e.g. "running 15 min late")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  chamber      DoctorChamber @relation(fields: [chamberId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@unique([chamberId, date])
+}
+
+// ─────────────────────────────────────────────────────────────
+// APPOINTMENT
+// ─────────────────────────────────────────────────────────────
+
+model Appointment {
+  id              String    @id @default(cuid())
+  patientId       String?   // null for walk-in patients
+  doctorId        String
+  chamberId       String
+  queueId         String
+  serialNumber    Int
+  slotTime        String?   // for SLOT type: "17:00"
+  status          String    @default("BOOKED") // BOOKED|WAITING|CURRENT|COMPLETED|SKIPPED|NO_SHOW|CANCELLED
+  date            String    // "2024-01-15"
+  isWalkin        Boolean   @default(false)
+  walkinName      String?   // walk-in patient name (no account)
+  walkinPhone     String?   // walk-in patient phone
+  consultDuration Int?      // actual duration in minutes (filled on completion)
+  patientNote     String?
+  doctorNote      String?
+  cancelReason    String?
+  cancelledAt     DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  patient      PatientProfile? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       DoctorProfile   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  chamber      DoctorChamber   @relation(fields: [chamberId], references: [id], onDelete: Cascade)
+  queue        Queue           @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  prescription Prescription?
+
+  @@index([queueId, status])
+  @@index([doctorId, date])
+  @@index([patientId, status])
+}
+
+// ─────────────────────────────────────────────────────────────
+// TEST BOOKING
+// ─────────────────────────────────────────────────────────────
+
+model TestBooking {
+  id              String   @id @default(cuid())
+  bookingRef      String   @unique @default(cuid())
+  patientId       String?  // null for walk-in / manual bookings
+  isWalkin        Boolean  @default(false)
+  centerId        String
+  serviceId       String
+  date            String
+  timeSlot        String?
+  status          String   @default("PENDING") // PENDING|CONFIRMED|PROCESSING|COMPLETED|CANCELLED
+  totalPrice      Int
+  patientName     String
+  patientPhone    String
+  patientAge      Int?
+  patientGender   String?
+  notes           String?
+  cancelReason    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  patient PatientProfile?  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  center  DiagnosticCenter @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  service DiagnosticService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────────────────────
+// NOTIFICATION
+// ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // BOOKING_CONFIRMED | QUEUE_APPROACHING | QUEUE_NEAR | QUEUE_VERY_NEAR | QUEUE_CURRENT | DOCTOR_DELAY | CHAMBER_CANCELLED | GENERAL
+  title     String
+  body      String
+  data      String?  // JSON payload (appointmentId, etc.)
+  isRead    Boolean  @default(false)
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+// ─────────────────────────────────────────────────────────────
+// REVIEW
+// ─────────────────────────────────────────────────────────────
+
+model Review {
+  id          String   @id @default(cuid())
+  userId      String
+  doctorId    String?
+  centerId    String?
+  rating      Int      // 1-5
+  comment     String?
+  isVerified  Boolean  @default(false)
+  isVisible   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctor DoctorProfile?    @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  center DiagnosticCenter? @relation(fields: [centerId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, doctorId])
+  @@unique([userId, centerId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// FAVORITE
+// ─────────────────────────────────────────────────────────────
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  doctorId  String?
+  centerId  String?
+  createdAt DateTime @default(now())
+
+  user   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctor DoctorProfile?    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  center DiagnosticCenter? @relation(fields: [centerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, doctorId])
+  @@unique([userId, centerId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// SUBSCRIPTION (doctor / diagnostic center billing plans)
+// ─────────────────────────────────────────────────────────────
+
+model Subscription {
+  id            String    @id @default(cuid())
+  plan          String    @default("FREE") // FREE | PRO | BUSINESS
+  status        String    @default("TRIALING") // TRIALING | ACTIVE | EXPIRED | CANCELLED
+  startedAt     DateTime  @default(now())
+  endsAt        DateTime
+  lastPlan      String?   // plan before it expired, for display
+  cancelledAt   DateTime?
+  doctorId      String?   @unique
+  centerId      String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  doctor DoctorProfile?    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  center DiagnosticCenter? @relation(fields: [centerId], references: [id], onDelete: Cascade)
+
+  @@index([status, endsAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// MEDICINE DATABASE
+// ─────────────────────────────────────────────────────────────
+
+model Medicine {
+  id          String   @id @default(cuid())
+  nameEn      String
+  nameBn      String?
+  genericName String
+  brandNames  String?  // JSON: string[]
+  type        String   @default("TABLET") // TABLET|CAPSULE|SYRUP|INJECTION|CREAM|DROPS|INHALER|SUPPOSITORY|OTHER
+  strength    String?  // "500mg", "250mg/5ml"
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  prescriptionItems PrescriptionItem[]
+
+  @@index([genericName])
+  @@index([nameEn])
+}
+
+// ─────────────────────────────────────────────────────────────
+// PRESCRIPTION
+// ─────────────────────────────────────────────────────────────
+
+model Prescription {
+  id             String   @id @default(cuid())
+  appointmentId  String   @unique
+  doctorId       String
+  patientId      String?
+  walkinName     String?
+  chiefComplaint String?
+  diagnosis      String?
+  advice         String?  // JSON: string[]
+  followUpDays   Int?
+  weight         String?  // "70 kg"
+  bloodPressure  String?  // "120/80"
+  temperature    String?  // "98.6°F"
+  pulse          String?  // "72/min"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  appointment Appointment     @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  doctor      DoctorProfile   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient     PatientProfile? @relation(fields: [patientId], references: [id])
+  items       PrescriptionItem[]
+}
+
+model PrescriptionItem {
+  id             String  @id @default(cuid())
+  prescriptionId String
+  medicineName   String
+  medicineId     String?
+  dosage         String  @default("1+0+1") // morning+noon+night
+  duration       String  @default("৭ দিন")
+  timing         String  @default("খাবার পরে") // খাবার আগে|পরে|খালি পেটে|রাতে ঘুমানোর আগে
+  quantity       String?
+  instructions   String?
+  sortOrder      Int     @default(0)
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicine     Medicine?    @relation(fields: [medicineId], references: [id])
+}
+
+// ─────────────────────────────────────────────────────────────
+// VERIFICATION LOG
+// ─────────────────────────────────────────────────────────────
+
+model VerificationLog {
+  id          String   @id @default(cuid())
+  entityType  String   // DOCTOR | DIAGNOSTIC
+  entityId    String
+  action      String   // SUBMITTED | UNDER_REVIEW | VERIFIED | REJECTED | SUSPENDED
+  adminNote   String?
+  performedBy String?  // admin userId
+  createdAt   DateTime @default(now())
+}
